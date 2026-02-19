@@ -7,5 +7,11 @@ wheels/
 *.egg-info
 
 # Virtual environments
-.venv
-*.parquet
+# Secrets / env files
+.env
+.env.*
+*.env
+.env_encoded
+.env_encoded.*
+secrets/
+*.json
