@@ -35,6 +35,16 @@ clean-targets:         # directories to be removed by `dbt clean`
 # continue to be built as views. These settings can be overridden in the individual model files
 # using the `{{ config(...) }}` macro.
 
+packages-install-path: "dbt_packages"
 models:
+
   taxi_rides:
+    # This applies to everything in the "models" folder
+    +materialized: view
+    
+    # You can break it down by subfolder
+    staging:
+      +materialized: view
+    core:
+      +materialized: table
 
