@@ -17,4 +17,4 @@ trips_unioned as (
     select * from yellow_data
 )
 
-select distinct vendor_id from trips_unioned
+select distinct * from trips_unioned
