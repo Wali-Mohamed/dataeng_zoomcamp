@@ -19,8 +19,10 @@ columns:
 
 import os
 import json
+import urllib.request  # <--- Added this
 from datetime import datetime
 import pandas as pd
+import io              # <--- Added this to handle the byte stream
 
 BASE_URL = "https://d37ci6vzurychx.cloudfront.net/trip-data"
 
@@ -45,12 +47,20 @@ def _month_range(start_date, end_date):
 
 
 def _read_parquet(url):
-    return pd.read_parquet(url)
+    # This header makes the request look like it's coming from a browser
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
+    
+    # We wrap the request in a Request object to include the headers
+    req = urllib.request.Request(url, headers=headers)
+    
+    with urllib.request.urlopen(req) as response:
+        # Read the bytes and pass them to pandas
+        return pd.read_parquet(io.BytesIO(response.read()))
 
 
 def _normalize_columns(df, taxi_type):
-    # Yellow: tpep_pickup_datetime, tpep_dropoff_datetime, PULocationID, DOLocationID
-    # Green:  lpep_pickup_datetime, lpep_dropoff_datetime, PULocationID, DOLocationID
     rename = {}
     if "tpep_pickup_datetime" in df.columns:
         rename["tpep_pickup_datetime"] = "pickup_datetime"
@@ -68,9 +78,16 @@ def _normalize_columns(df, taxi_type):
 
 
 def materialize():
+    # Note: Ensure BRUIN_START_DATE is set to 2025-12-01 or earlier in pipeline.yml
     start_date = os.environ["BRUIN_START_DATE"]
     end_date = os.environ["BRUIN_END_DATE"]
-    taxi_types = json.loads(os.environ["BRUIN_VARS"]).get("taxi_types", ["yellow"])
+    
+    # Safely handle the JSON variables
+    try:
+        vars_env = os.environ.get("BRUIN_VARS", "{}")
+        taxi_types = json.loads(vars_env).get("taxi_types", ["yellow"])
+    except json.JSONDecodeError:
+        taxi_types = ["yellow"]
 
     needed = [
         "pickup_datetime",
@@ -92,6 +109,7 @@ def materialize():
                 df = df[[c for c in needed if c in df.columns]]
                 frames.append(df)
             except Exception as e:
+                # If we hit a month that truly doesn't exist yet, this will still raise
                 raise RuntimeError(f"Failed to fetch {url}: {e}") from e
 
     if not frames:
@@ -99,8 +117,6 @@ def materialize():
 
     final_dataframe = pd.concat(frames, ignore_index=True)
 
-    # Return datetime columns as ISO strings so ingestr/PyArrow never see a timestamp type
-    # (avoids "Timezone database not found" on Windows when ingestr normalizes the payload).
     for col in ("pickup_datetime", "dropoff_datetime"):
         if col not in final_dataframe.columns:
             continue
@@ -108,4 +124,5 @@ def materialize():
         if hasattr(ser.dtype, "tz") and ser.dtype.tz is not None:
             ser = pd.to_datetime(ser.astype("int64"), unit="ns")
         final_dataframe[col] = pd.to_datetime(ser).dt.strftime("%Y-%m-%d %H:%M:%S").astype(str)
+    
     return final_dataframe
