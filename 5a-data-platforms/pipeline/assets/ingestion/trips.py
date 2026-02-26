@@ -78,15 +78,13 @@ def _normalize_columns(df, taxi_type):
 
 
 def materialize():
-    # Note: Ensure BRUIN_START_DATE is set to 2025-12-01 or earlier in pipeline.yml
     start_date = os.environ["BRUIN_START_DATE"]
     end_date = os.environ["BRUIN_END_DATE"]
     
-    # Safely handle the JSON variables
     try:
         vars_env = os.environ.get("BRUIN_VARS", "{}")
         taxi_types = json.loads(vars_env).get("taxi_types", ["yellow"])
-    except json.JSONDecodeError:
+    except:
         taxi_types = ["yellow"]
 
     needed = [
@@ -104,25 +102,19 @@ def materialize():
         for taxi_type in taxi_types:
             url = f"{BASE_URL}/{taxi_type}_tripdata_{year}-{month:02d}.parquet"
             try:
+                print(f"Attempting to fetch: {url}")
                 df = _read_parquet(url)
                 df = _normalize_columns(df, taxi_type)
                 df = df[[c for c in needed if c in df.columns]]
                 frames.append(df)
+                print(f"Successfully fetched: {url}")
             except Exception as e:
-                # If we hit a month that truly doesn't exist yet, this will still raise
-                raise RuntimeError(f"Failed to fetch {url}: {e}") from e
+                # INSTEAD OF RAISING: We log the error and keep going
+                print(f"WARNING: Skipping {url} due to error: {e}")
+                continue 
 
     if not frames:
+        print("No data was fetched for the given range.")
         return pd.DataFrame(columns=needed)
 
-    final_dataframe = pd.concat(frames, ignore_index=True)
-
-    for col in ("pickup_datetime", "dropoff_datetime"):
-        if col not in final_dataframe.columns:
-            continue
-        ser = final_dataframe[col]
-        if hasattr(ser.dtype, "tz") and ser.dtype.tz is not None:
-            ser = pd.to_datetime(ser.astype("int64"), unit="ns")
-        final_dataframe[col] = pd.to_datetime(ser).dt.strftime("%Y-%m-%d %H:%M:%S").astype(str)
-    
-    return final_dataframe
+    return pd.concat(frames, ignore_index=True)
