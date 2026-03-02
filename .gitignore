@@ -23,3 +23,5 @@ logs/*.log
 logs/queries
 duckdb.db
 *.db
+*.csv
+*.gz

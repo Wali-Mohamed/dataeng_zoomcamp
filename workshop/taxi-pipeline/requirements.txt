@@ -1,0 +1,3 @@
+dlt
+requests
+dlt[duckdb]>=1.22.2
