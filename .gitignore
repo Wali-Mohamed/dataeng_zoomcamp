@@ -25,3 +25,9 @@ duckdb.db
 *.db
 *.csv
 *.gz
+data/
+pq/
+tmp/
+*.ipynb_checkpoints
+*.parquet
+
