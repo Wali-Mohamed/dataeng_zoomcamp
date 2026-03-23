@@ -30,4 +30,5 @@ pq/
 tmp/
 *.ipynb_checkpoints
 *.parquet
+/spark
 

@@ -21,8 +21,10 @@ input_yellow = args.input_yellow
 output = args.output
 
 
+
 spark = SparkSession.builder \
-    .appName('test') \
+    .master("spark://localhost:7077") \
+    .appName("local_cluster_test") \
     .getOrCreate()
 
 df_green = spark.read.parquet(input_green)
